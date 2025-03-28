@@ -9,6 +9,8 @@ import {
   SendMode,
 } from '@ton/core';
 
+import MessagerCompiled from '../build/Messager.compiled.json'
+
 export type MessagerConfig = {
   manager: Address;
 };
@@ -40,6 +42,21 @@ export class Messager implements Contract {
         body: beginCell().endCell(),
     });
   }
+
+  static async getCode() {
+    return MessagerCompiled.hex
+}
+
+  static async fromInit(manager: Address, memorized: Address) {
+    const code = await this.getCode()
+    const data = beginCell()
+        .storeAddress(manager)
+        .storeAddress(memorized)
+        .endCell()
+    const init = { code: Cell.fromBoc(Buffer.from(code, 'hex'))[0], data }
+    const address = contractAddress(0, init)
+    return new Messager(address, init)
+}
 
   async sendChangeAddress(provider: ContractProvider, via: Sender, value: bigint, queryId: bigint, newAddress: Address) {
     await provider.internal(via, {
