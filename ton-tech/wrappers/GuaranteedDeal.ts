@@ -1,20 +1,38 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano } from '@ton/core';
+import { Op } from './op-codes';
 
 export type GuaranteedDealConfig = {
-    id: number;
-    counter: number;
+    seller: Address;
+    buyer: Address;
+    guarantor: Address;
+    amount: bigint;
+    paymentType: number; // 0 for TON, 1 for Jetton
+    jettonWallet: Address;
+    jettonMaster: Address;
+    royalty: bigint;
+    state: number;
 };
 
 export function guaranteedDealConfigToCell(config: GuaranteedDealConfig): Cell {
-    return beginCell().storeUint(config.id, 32).storeUint(config.counter, 32).endCell();
+    return beginCell()
+        .storeUint(0, 8)
+        .storeAddress(config.seller)
+        .storeAddress(config.buyer)
+        .storeAddress(config.guarantor)
+        .storeCoins(config.amount)
+        .storeUint(config.paymentType, 8)
+        .storeAddress(config.jettonWallet)
+        .storeAddress(config.jettonMaster)
+        .storeCoins(config.royalty)
+        .storeUint(config.state, 8)
+        .endCell();
 }
 
-export const Opcodes = {
-    increase: 0x7e8764ef,
-};
-
 export class GuaranteedDeal implements Contract {
-    constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+    constructor(
+        readonly address: Address,
+        readonly init?: { code: Cell; data: Cell }
+    ) {}
 
     static createFromAddress(address: Address) {
         return new GuaranteedDeal(address);
@@ -26,41 +44,72 @@ export class GuaranteedDeal implements Contract {
         return new GuaranteedDeal(contractAddress(workchain, init), init);
     }
 
-    async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
+    async sendDeploy(provider: ContractProvider, via: Sender, value: bigint, params: {
+        seller: Address;
+        guarantor: Address;
+        amount: bigint;
+        paymentType: number;
+        jettonWallet: Address;
+        jettonMaster: Address;
+        royalty: bigint;
+    }) {
         await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell().endCell(),
-        });
-    }
-
-    async sendIncrease(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            increaseBy: number;
-            value: bigint;
-            queryID?: number;
-        }
-    ) {
-        await provider.internal(via, {
-            value: opts.value,
-            sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(Opcodes.increase, 32)
-                .storeUint(opts.queryID ?? 0, 64)
-                .storeUint(opts.increaseBy, 32)
+                .storeUint(Op.deploy, 32)
+                .storeUint(0, 64)
+                .storeAddress(params.seller)
+                .storeAddress(params.guarantor)
+                .storeCoins(params.amount)
+                .storeUint(params.paymentType, 8)
+                .storeAddress(params.jettonWallet)
+                .storeAddress(params.jettonMaster)
+                .storeCoins(params.royalty)
                 .endCell(),
         });
     }
 
-    async getCounter(provider: ContractProvider) {
-        const result = await provider.get('get_counter', []);
-        return result.stack.readNumber();
+    async sendBuy(provider: ContractProvider, via: Sender, value: bigint) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Op.buy, 32)
+                .storeUint(0, 64)
+                .endCell(),
+        });
     }
 
-    async getID(provider: ContractProvider) {
-        const result = await provider.get('get_id', []);
-        return result.stack.readNumber();
+    async sendComplete(provider: ContractProvider, via: Sender, value: bigint) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Op.complete, 32)
+                .storeUint(0, 64)
+                .endCell(),
+        });
+    }
+
+    async sendRefund(provider: ContractProvider, via: Sender, value: bigint) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Op.refund, 32)
+                .storeUint(0, 64)
+                .endCell(),
+        });
+    }
+
+    async getPaymentType(provider: ContractProvider): Promise<number> {
+        const { stack } = await provider.get('get_payment_type', []);
+        return stack.readNumber();
+    }
+
+    async getState(provider: ContractProvider): Promise<number> {
+        const { stack } = await provider.get('get_state', []);
+        return stack.readNumber();
     }
 }

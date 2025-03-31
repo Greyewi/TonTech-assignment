@@ -1,0 +1,7 @@
+#pragma version >=0.2.0;
+
+const int op::deploy = 0x1;
+const int op::buy = 0x2;
+const int op::complete = 0x3;
+const int op::refund = 0x4;
+const int op::transfer = 0xf8a7ea5; 

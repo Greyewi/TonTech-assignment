@@ -1,0 +1,9 @@
+#pragma version >=0.2.0;
+
+const int PAYMENT_TYPE_TON = 0;
+const int PAYMENT_TYPE_JETTON = 1;
+
+const int STATE_INITIAL = 0;
+const int STATE_PAYMENT_RECEIVED = 1;
+const int STATE_COMPLETED = 2;
+const int STATE_REFUNDED = 3; 
